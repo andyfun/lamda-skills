@@ -18,13 +18,13 @@ Compatible with OpenCode, Claude Code, Cursor, Codex and any agent that follows 
 
 ```bash
 # global (available in every project)
-npx skills add <owner>/lamda-skills -a opencode -g
+npx skills add andyfun/lamda-skills -a opencode -g
 
 # project-local (committed with the repo)
-npx skills add <owner>/lamda-skills -a opencode
+npx skills add andyfun/lamda-skills -a opencode
 
 # one skill only
-npx skills add <owner>/lamda-skills --skill lamda-report -a opencode -g
+npx skills add andyfun/lamda-skills --skill lamda-report -a opencode -g
 
 # from a local checkout
 npx skills add . -a opencode --copy
