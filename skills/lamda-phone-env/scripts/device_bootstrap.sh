@@ -39,6 +39,8 @@ DRY_RUN=0
 # publishes only server tarballs, so its APK has no official direct link.
 SHIZUKU_APK_URL="${LAMDA_SHIZUKU_APK_URL:-https://github.com/RikkaApps/Shizuku/releases/download/v13.6.0/shizuku-v13.6.0.r1086.2650830c-release.apk}"
 FIRERPA_APK_URL="${LAMDA_FIRERPA_APK_URL:-}"
+SHIZUKU_APK_SHA256="${LAMDA_SHIZUKU_APK_SHA256:-}"
+FIRERPA_APK_SHA256="${LAMDA_FIRERPA_APK_SHA256:-}"
 
 if [[ -n "${LAMDA_APK_BASE_URL:-}" ]]; then
   [[ -n "$FIRERPA_APK_URL" ]] || FIRERPA_APK_URL="${LAMDA_APK_BASE_URL%/}/firerpa.apk"
@@ -80,9 +82,16 @@ url_for() {
 }
 
 download_apk() {
-  local name="$1" url="$2" dest="$3"
+  local name="$1" url="$2" dest="$3" expected_sha="${4:-}"
   if [[ -z "$url" ]]; then
     echo "  $name : no download URL configured" >&2
+    case "$name" in
+      firerpa.apk)
+        echo "           FIRERPA ships no APK on GitHub releases." >&2
+        echo "           upload it once, then set LAMDA_FIRERPA_APK_URL or LAMDA_APK_BASE_URL" >&2 ;;
+      shizuku.apk)
+        echo "           see https://github.com/RikkaApps/Shizuku/releases" >&2 ;;
+    esac
     return 1
   fi
   if ! command -v curl >/dev/null; then
@@ -91,23 +100,47 @@ download_apk() {
   fi
   echo "  $name : downloading from $url"
   mkdir -p "$(dirname "$dest")"
-  if ! curl -fL --retry 2 --connect-timeout 10 --max-time 600 -o "$dest.part" "$url"; then
+  if ! curl -fL --retry 2 --connect-timeout 10 --max-time 900 -o "$dest.part" "$url"; then
     rm -f "$dest.part"
-    echo "  $name : download failed" >&2
+    echo "  $name : download failed (404, blocked network, or mirror unreachable)" >&2
     return 1
   fi
+
+  # A mirror may answer 200 with an HTML login page; an APK is a zip and starts with "PK".
+  if [[ "$(head -c 2 "$dest.part" 2>/dev/null)" != "PK" ]]; then
+    echo "  $name : not an APK (missing PK header) — wrong URL or a proxy/login page" >&2
+    rm -f "$dest.part"
+    return 1
+  fi
+
+  if [[ -n "$expected_sha" ]]; then
+    local actual
+    actual="$(shasum -a 256 "$dest.part" | awk '{print $1}')"
+    if [[ "$actual" != "$expected_sha" ]]; then
+      echo "  $name : sha256 mismatch" >&2
+      echo "           expected $expected_sha" >&2
+      echo "           actual   $actual" >&2
+      rm -f "$dest.part"
+      return 1
+    fi
+  fi
+
   mv "$dest.part" "$dest"
-  echo "  $name : saved to $dest"
+  echo "  $name : saved to $dest ($(du -h "$dest" | cut -f1))"
 }
 
 ensure_apk() {
-  local name="$1" found
+  local name="$1" found expected=""
   if found="$(find_apk "$name")"; then
     printf '%s\n' "$found"
     return 0
   fi
+  case "$name" in
+    firerpa.apk) expected="$FIRERPA_APK_SHA256" ;;
+    shizuku.apk) expected="$SHIZUKU_APK_SHA256" ;;
+  esac
   if [[ "$DOWNLOAD" == 1 ]]; then
-    download_apk "$name" "$(url_for "$name")" "$CACHE_DIR/$name" >&2 || return 1
+    download_apk "$name" "$(url_for "$name")" "$CACHE_DIR/$name" "$expected" >&2 || return 1
     printf '%s\n' "$CACHE_DIR/$name"
     return 0
   fi

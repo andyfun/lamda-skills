@@ -73,6 +73,16 @@ LAMDA_APK_BASE_URL=https://host/mirror             # expects <base>/firerpa.apk 
 `LAMDA_APK_BASE_URL` is also the answer when `github.com` is unreachable from
 your network: point it at a mirror you trust, and both packages download from there.
 
+Downloads are validated before install:
+
+- the file must start with `PK` (an APK is a zip), so a mirror that answers with an
+  HTML login page fails immediately instead of producing a broken `adb install`
+- pin a checksum when you host your own copy:
+
+```bash
+LAMDA_FIRERPA_APK_SHA256=<sha256> LAMDA_SHIZUKU_APK_SHA256=<sha256>
+```
+
 After the script, finish these **once** in the FIRERPA app:
 
 1. allow Shizuku; `IDENTITY` should show `shell (shizuku)` or `root`
