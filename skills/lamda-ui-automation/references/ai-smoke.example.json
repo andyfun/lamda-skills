@@ -1,0 +1,37 @@
+{
+  "steps": [
+    {
+      "type": "wait",
+      "seconds": 15
+    },
+    {
+      "type": "capture",
+      "name": "step_01_initial.jpg"
+    },
+    {
+      "type": "probe",
+      "name": "loading",
+      "prompt": "当前画面是否仍在显示加载进度界面？",
+      "if_true": [
+        {
+          "type": "wait",
+          "seconds": 10
+        },
+        {
+          "type": "capture",
+          "name": "step_01_initial.jpg"
+        }
+      ]
+    },
+    {
+      "type": "probe",
+      "name": "state",
+      "prompt": "当前画面是否是登录页？"
+    },
+    {
+      "type": "assert",
+      "name": "final",
+      "prompt": "当前画面是目标应用的主界面或可操作状态。"
+    }
+  ]
+}

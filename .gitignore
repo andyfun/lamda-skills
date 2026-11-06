@@ -1,0 +1,10 @@
+.DS_Store
+__pycache__/
+*.py[cod]
+.env
+.env.*
+artifacts/
+*.skill
+.venv/
+node_modules/
+skills-lock.json
