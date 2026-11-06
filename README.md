@@ -16,22 +16,58 @@ Compatible with OpenCode, Claude Code, Cursor, Codex and any agent that follows 
 
 ## Install
 
+Two ways: the [`skills`](https://github.com/vercel-labs/skills) CLI (recommended), or the
+packaged `.skill` zips.
+
+### OpenCode
+
 ```bash
-# global (available in every project)
-npx skills add andyfun/lamda-skills -a opencode -g
-
-# project-local (committed with the repo)
-npx skills add andyfun/lamda-skills -a opencode
-
-# one skill only
-npx skills add andyfun/lamda-skills --skill lamda-report -a opencode -g
-
-# from a local checkout
-npx skills add . -a opencode --copy
+npx skills add andyfun/lamda-skills -a opencode -g     # global
+npx skills add andyfun/lamda-skills -a opencode        # project
 ```
 
-OpenCode resolves skills from `~/.config/opencode/skills/` (global) and
-`.agents/skills/` / `.opencode/skills/` (project).
+### Cursor
+
+```bash
+npx skills add andyfun/lamda-skills -a cursor -g       # global  → ~/.cursor/skills/
+npx skills add andyfun/lamda-skills -a cursor          # project → .cursor/skills/
+```
+
+Cursor also reads `.agents/skills/` and `~/.agents/skills/`, plus the Claude and Codex
+directories. So one install can serve both agents:
+
+```bash
+npx skills add andyfun/lamda-skills -a opencode -a cursor -g   # → ~/.agents/skills/
+```
+
+After that, Cursor lists them under **Customize → Skills** and you can invoke one with
+`/skill-name` in Agent chat. Restart the window if the list looks stale.
+
+Cursor cannot install straight from a bare repository — that path needs a plugin
+marketplace — but a normal folder install works exactly like above.
+
+### Offline / `.skill` packages
+
+Every skill also ships as a zip with `<name>/SKILL.md` at the root:
+
+```bash
+unzip -o lamda-report.skill -d ~/.config/opencode/skills/   # OpenCode
+unzip -o lamda-report.skill -d ~/.cursor/skills/            # Cursor
+unzip -o lamda-report.skill -d ~/.agents/skills/            # both agents
+```
+
+### Where skills are discovered
+
+| Agent | Global | Project |
+|---|---|---|
+| OpenCode | `~/.config/opencode/skills/` | `.opencode/skills/`, `.agents/skills/` |
+| Cursor | `~/.cursor/skills/` | `.cursor/skills/`, `.agents/skills/` |
+| **Both (shared)** | `~/.agents/skills/` | `.agents/skills/` |
+| Claude Code | `~/.claude/skills/` | `.claude/skills/` |
+| Codex | `~/.codex/skills/` | `.codex/skills/` |
+
+Keep the folder name identical to the `name:` field in `SKILL.md`; both agents reject
+mismatches.
 
 ## Configuration
 
