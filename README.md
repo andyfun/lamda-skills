@@ -42,6 +42,8 @@ Nothing is hard-coded. Set these when the defaults do not fit:
 | `LAMDA_HOST` | `127.0.0.1` | Phone address. `127.0.0.1` works with `adb forward tcp:65000 tcp:65000`; use the LAN IP otherwise |
 | `LAMDA_PORT` | `65000` | LAMDA gRPC/HTTP port |
 | `LAMDA_PYTHON` | current interpreter | Interpreter that has `lamda` installed (a venv activate does not survive between commands) |
+| `LAMDA_APK_BASE_URL` | unset | Mirror root for `firerpa.apk` / `shizuku.apk` when GitHub is unreachable |
+| `LAMDA_APK_URL` / `LAMDA_FIRERPA_APK_URL` | unset | Direct APK URL override used by `device_bootstrap.sh --download` |
 
 ```bash
 npx skills add ...

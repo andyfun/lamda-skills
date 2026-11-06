@@ -31,17 +31,47 @@ before its service exists.
 
 ```bash
 adb devices                     # must show "device", not "unauthorized"
-scripts/device_bootstrap.sh --serial <adb-serial> \
-  --kit ~/workspace/lamda-kit \
-  --host <phone-ip>
+
+# APKs already downloaded somewhere
+scripts/device_bootstrap.sh --serial <adb-serial> --apk-dir ~/apks --host <phone-ip>
+
+# or a lamda-kit checkout
+scripts/device_bootstrap.sh --serial <adb-serial> --kit ~/workspace/lamda-kit
+
+# or fetch missing APKs into ~/.cache/lamda-kit/files first
+scripts/device_bootstrap.sh --serial <adb-serial> --download
+
+# inspect what would be used, without touching the device
+scripts/device_bootstrap.sh --dry-run --download
 ```
 
 The script:
 
 1. checks FIRERPA / Shizuku / ABI / Android version
 2. installs `firerpa.apk` + `shizuku.apk` (APK mode) when missing
-3. starts Shizuku through adb
+3. starts Shizuku through adb when a kit `shizuku-start.sh` is available
 4. opens FIRERPA and waits for `65000` when `--host` is supplied
+
+### Where the APKs come from
+
+Resolution order: `--apk-dir` → `<kit>/files` → `~/.cache/lamda-kit/files` →
+`--download`.
+
+| Package | Downloadable? |
+|---|---|
+| Shizuku | Yes. Official GitHub Releases, pinned in the script (currently `v13.6.0`) |
+| FIRERPA | **No official direct link.** `firerpa/lamda` releases v9.4–v10.9 contain only server tarballs, no APK asset |
+
+So FIRERPA needs one of:
+
+```bash
+--apk-dir ~/apks                                   # a local copy
+LAMDA_FIRERPA_APK_URL=https://host/firerpa.apk      # any direct URL
+LAMDA_APK_BASE_URL=https://host/mirror             # expects <base>/firerpa.apk + <base>/shizuku.apk
+```
+
+`LAMDA_APK_BASE_URL` is also the answer when `github.com` is unreachable from
+your network: point it at a mirror you trust, and both packages download from there.
 
 After the script, finish these **once** in the FIRERPA app:
 
@@ -49,9 +79,7 @@ After the script, finish these **once** in the FIRERPA app:
 2. tap **Download now** to install the server, then **Start Service**
 3. keep **Auto start on boot** enabled if needed
 
-`--kit` defaults to `$LAMDA_KIT` or `~/workspace/lamda-kit`; it must contain
-`files/firerpa.apk`, `files/shizuku.apk`, `install.sh`, and `shizuku-start.sh`.
-The script does not download the 214MB server package; the app does that.
+The script does not download the ~200MB server package; the app does that.
 
 For a **rooted** device, APK mode still works (the app can use root). The
 kit's `install.sh --mode manual` path is optional; it installs under

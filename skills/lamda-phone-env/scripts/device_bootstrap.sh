@@ -1,42 +1,138 @@
 #!/usr/bin/env bash
 # Check / install FIRERPA + Shizuku on a USB-connected Android phone.
 #
-# Requires: adb in PATH, an authorized device, and a lamda-kit checkout
-# containing files/firerpa.apk, files/shizuku.apk and install.sh.
+# APKs are resolved from the first location that has them:
+#   1. --apk-dir DIR
+#   2. --kit DIR/files            (a lamda-kit checkout)
+#   3. ~/.cache/lamda-kit/files   (populated by --download)
+#   4. --download                 (fetch, then install from the cache)
 #
 # Usage:
-#   ./device_bootstrap.sh --serial <adb-serial>
-#   ./device_bootstrap.sh --serial <adb-serial> --mode check
+#   ./device_bootstrap.sh --serial <adb-serial> --apk-dir ~/apks
 #   ./device_bootstrap.sh --serial <adb-serial> --kit ~/workspace/lamda-kit
-#   ./device_bootstrap.sh --serial <adb-serial> --host 192.168.1.50
+#   ./device_bootstrap.sh --serial <adb-serial> --download
+#   ./device_bootstrap.sh --serial <adb-serial> --mode check --host 192.168.1.50
+#   ./device_bootstrap.sh --dry-run --apk-dir ~/apks
 #
 # APK mode is the recommended non-root path. It installs the manager apps and
 # starts Shizuku via adb; the remaining server download/start is done in the
 # FIRERPA app (the script prints the exact steps).
+#
+# Download sources (override with env vars):
+#   LAMDA_FIRERPA_APK_URL   direct URL for firerpa.apk
+#   LAMDA_SHIZUKU_APK_URL   direct URL for shizuku.apk
+#   LAMDA_APK_BASE_URL      mirror root, expects <base>/firerpa.apk and <base>/shizuku.apk
+#   LAMDA_CACHE             cache dir (default ~/.cache/lamda-kit)
 set -euo pipefail
 
-KIT="${LAMDA_KIT:-$HOME/workspace/lamda-kit}"
+KIT="${LAMDA_KIT:-}"
+APK_DIR=""
+CACHE="${LAMDA_CACHE:-$HOME/.cache/lamda-kit}"
 SERIAL=""
 HOST=""
 PORT=65000
 MODE="apk"
+DOWNLOAD=0
+DRY_RUN=0
+
+# Official sources. Shizuku publishes APKs on GitHub Releases; FIRERPA (lamda)
+# publishes only server tarballs, so its APK has no official direct link.
+SHIZUKU_APK_URL="${LAMDA_SHIZUKU_APK_URL:-https://github.com/RikkaApps/Shizuku/releases/download/v13.6.0/shizuku-v13.6.0.r1086.2650830c-release.apk}"
+FIRERPA_APK_URL="${LAMDA_FIRERPA_APK_URL:-}"
+
+if [[ -n "${LAMDA_APK_BASE_URL:-}" ]]; then
+  [[ -n "$FIRERPA_APK_URL" ]] || FIRERPA_APK_URL="${LAMDA_APK_BASE_URL%/}/firerpa.apk"
+  [[ -n "$SHIZUKU_APK_URL" ]] || SHIZUKU_APK_URL="${LAMDA_APK_BASE_URL%/}/shizuku.apk"
+fi
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --serial|-s) SERIAL="${2:-}"; shift 2 ;;
     --kit) KIT="${2:-}"; shift 2 ;;
+    --apk-dir) APK_DIR="${2:-}"; shift 2 ;;
     --host) HOST="${2:-}"; shift 2 ;;
     --port) PORT="${2:-}"; shift 2 ;;
     --mode) MODE="${2:-}"; shift 2 ;;
-    -h|--help) sed -n '2,22p' "$0"; exit 0 ;;
+    --download) DOWNLOAD=1; shift ;;
+    --dry-run) DRY_RUN=1; shift ;;
+    -h|--help) sed -n '2,30p' "$0"; exit 0 ;;
     *) echo "unknown argument: $1" >&2; exit 2 ;;
   esac
 done
 
-ADB=(adb)
-[[ -n "$SERIAL" ]] && ADB+=(-s "$SERIAL")
 FIRERPA=com.firerpa
 SHIZUKU=moe.shizuku.privileged.api
+CACHE_DIR="$CACHE/files"
+
+find_apk() {
+  local name="$1" d
+  for d in "$APK_DIR" "${KIT:+$KIT/files}" "$CACHE_DIR"; do
+    [[ -n "$d" && -f "$d/$name" ]] && { printf '%s\n' "$d/$name"; return 0; }
+  done
+  return 1
+}
+
+url_for() {
+  case "$1" in
+    firerpa.apk) printf '%s\n' "$FIRERPA_APK_URL" ;;
+    shizuku.apk) printf '%s\n' "$SHIZUKU_APK_URL" ;;
+  esac
+}
+
+download_apk() {
+  local name="$1" url="$2" dest="$3"
+  if [[ -z "$url" ]]; then
+    echo "  $name : no download URL configured" >&2
+    return 1
+  fi
+  if ! command -v curl >/dev/null; then
+    echo "  $name : curl not found, cannot download" >&2
+    return 1
+  fi
+  echo "  $name : downloading from $url"
+  mkdir -p "$(dirname "$dest")"
+  if ! curl -fL --retry 2 --connect-timeout 10 --max-time 600 -o "$dest.part" "$url"; then
+    rm -f "$dest.part"
+    echo "  $name : download failed" >&2
+    return 1
+  fi
+  mv "$dest.part" "$dest"
+  echo "  $name : saved to $dest"
+}
+
+ensure_apk() {
+  local name="$1" found
+  if found="$(find_apk "$name")"; then
+    printf '%s\n' "$found"
+    return 0
+  fi
+  if [[ "$DOWNLOAD" == 1 ]]; then
+    download_apk "$name" "$(url_for "$name")" "$CACHE_DIR/$name" >&2 || return 1
+    printf '%s\n' "$CACHE_DIR/$name"
+    return 0
+  fi
+  return 1
+}
+
+if [[ "$DRY_RUN" == 1 ]]; then
+  echo "mode    : $MODE"
+  echo "cache   : $CACHE_DIR"
+  [[ -n "$KIT" ]] && echo "kit     : $KIT"
+  [[ -n "$APK_DIR" ]] && echo "apk-dir : $APK_DIR"
+  for name in shizuku.apk firerpa.apk; do
+    if found="$(find_apk "$name")"; then
+      echo "$name : $found"
+    elif [[ "$DOWNLOAD" == 1 ]]; then
+      echo "$name : missing, would download from $(url_for "$name" | sed 's/^$/<no url configured>/')"
+    else
+      echo "$name : missing (pass --apk-dir, --kit, or --download)"
+    fi
+  done
+  exit 0
+fi
+
+ADB=(adb)
+[[ -n "$SERIAL" ]] && ADB+=(-s "$SERIAL")
 
 command -v adb >/dev/null || {
   echo "adb not found; install Android platform-tools first" >&2
@@ -70,26 +166,38 @@ if [[ "$MODE" == "check" ]]; then
   exit 0
 fi
 
-if [[ ! -d "$KIT" ]]; then
-  echo "lamda-kit not found: $KIT" >&2
-  echo "set LAMDA_KIT or pass --kit /path/to/lamda-kit" >&2
-  exit 2
-fi
-
 need_install=0
 has_pkg "$FIRERPA" || need_install=1
 has_pkg "$SHIZUKU" || need_install=1
 
 if [[ "$need_install" == 1 ]]; then
   if [[ "$MODE" == "apk" ]]; then
-    [[ -f "$KIT/files/firerpa.apk" && -f "$KIT/files/shizuku.apk" ]] || {
-      echo "missing $KIT/files/firerpa.apk or shizuku.apk" >&2
-      exit 2
-    }
-    echo "installing FIRERPA + Shizuku (APK mode)..."
-    "${ADB[@]}" install -r -g "$KIT/files/shizuku.apk" >/dev/null
-    "${ADB[@]}" install -r -g "$KIT/files/firerpa.apk" >/dev/null
+    FIRERPA_APK=""
+    SHIZUKU_APK=""
+    if has_pkg "$FIRERPA" 2>/dev/null; then :; else
+      FIRERPA_APK="$(ensure_apk firerpa.apk)" || {
+        echo "cannot locate firerpa.apk" >&2
+        echo "  tried: ${APK_DIR:-<no --apk-dir>}, ${KIT:-<no --kit>}/files, $CACHE_DIR" >&2
+        echo "  FIRERPA publishes no APK asset on GitHub; point --apk-dir or LAMDA_FIRERPA_APK_URL at a copy" >&2
+        exit 2
+      }
+    fi
+    if has_pkg "$SHIZUKU" 2>/dev/null; then :; else
+      SHIZUKU_APK="$(ensure_apk shizuku.apk)" || {
+        echo "cannot locate shizuku.apk" >&2
+        echo "  tried: ${APK_DIR:-<no --apk-dir>}, ${KIT:-<no --kit>}/files, $CACHE_DIR" >&2
+        echo "  official: https://github.com/RikkaApps/Shizuku/releases" >&2
+        exit 2
+      }
+    fi
+    echo "installing (apk mode)..."
+    [[ -n "$SHIZUKU_APK" ]] && { echo "  shizuku <- $SHIZUKU_APK"; "${ADB[@]}" install -r -g "$SHIZUKU_APK" >/dev/null; }
+    [[ -n "$FIRERPA_APK" ]] && { echo "  firerpa <- $FIRERPA_APK"; "${ADB[@]}" install -r -g "$FIRERPA_APK" >/dev/null; }
   elif [[ "$MODE" == "manual" ]]; then
+    if [[ -z "$KIT" || ! -x "$KIT/install.sh" ]]; then
+      echo "--mode manual needs a lamda-kit checkout with install.sh (--kit DIR)" >&2
+      exit 2
+    fi
     echo "running lamda-kit manual install..."
     (cd "$KIT" && ./install.sh --mode manual ${SERIAL:+-s "$SERIAL"}) || true
   else
@@ -99,8 +207,13 @@ if [[ "$need_install" == 1 ]]; then
 fi
 
 if has_pkg "$SHIZUKU"; then
-  echo "starting Shizuku via adb..."
-  "$KIT/shizuku-start.sh" ${SERIAL:+"$SERIAL"} || true
+  if [[ -n "$KIT" && -x "$KIT/shizuku-start.sh" ]]; then
+    echo "starting Shizuku via adb..."
+    "$KIT/shizuku-start.sh" ${SERIAL:+"$SERIAL"} || true
+  else
+    echo "Shizuku installed; no shizuku-start.sh available."
+    echo "  open Shizuku and start it (Wireless debugging or root), then return."
+  fi
 fi
 
 if has_pkg "$FIRERPA"; then
