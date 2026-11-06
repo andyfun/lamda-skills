@@ -11,6 +11,7 @@ Compatible with OpenCode, Claude Code, Cursor, Codex and any agent that follows 
 | `lamda-phone-env` | Bootstrap a machine to talk to a LAMDA/FIRERPA phone: TCP check, Python/Node deps, first screenshot/XML | yes |
 | `lamda-ui-automation` | Write and run UI flows, capture screenshot/XML evidence, deterministic selector assertions, read-only visual oracle | yes |
 | `lamda-report` | Turn a run directory into a dark, self-contained HTML report with per-case pages and evidence | no |
+| `runtime-protocol-report` | Turn captured HTTP/TLS traffic into an API contract matrix + standalone HTML report | no |
 | `refactoring-ui` | Design rules from *Refactoring UI*: spacing/type/color scales, hierarchy, depth | no |
 
 ## Install
